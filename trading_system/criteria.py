@@ -18,7 +18,17 @@ class PassCriteria:
     min_sharpe: float = 0.5
     max_drawdown: float = 0.15  # as a fraction, e.g. 0.15 = 15%
     must_beat_benchmark: bool = True
+    # Which metric the "beat the benchmark" check compares: "sharpe"
+    # (risk-adjusted; chosen 2026-09-18) or "total_return" (raw return).
+    beat_benchmark_on: str = "total_return"
     max_pairwise_corr: float = 0.7  # vs reference return series, when provided
+
+    def __post_init__(self):
+        if self.beat_benchmark_on not in ("sharpe", "total_return"):
+            raise ValueError(
+                f"beat_benchmark_on must be 'sharpe' or 'total_return', "
+                f"got {self.beat_benchmark_on!r}"
+            )
 
 
 def evaluate(
@@ -49,10 +59,11 @@ def evaluate(
         reasons.append(f"max_drawdown {max_dd:.3f} > {criteria.max_drawdown}")
 
     if criteria.must_beat_benchmark:
-        r_ret = float(m.get("total_return", 0.0))
-        b_ret = float(benchmark_result.metrics.get("total_return", 0.0))
-        if not r_ret > b_ret:
-            reasons.append(f"total_return {r_ret:.4f} did not beat benchmark {b_ret:.4f}")
+        metric = criteria.beat_benchmark_on
+        r_val = float(m.get(metric, 0.0))
+        b_val = float(benchmark_result.metrics.get(metric, 0.0))
+        if not r_val > b_val:
+            reasons.append(f"{metric} {r_val:.4f} did not beat benchmark {b_val:.4f}")
 
     if reference_returns:
         rets = result.equity.pct_change().dropna()

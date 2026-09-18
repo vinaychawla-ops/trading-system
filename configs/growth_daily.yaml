@@ -59,6 +59,10 @@ criteria:
   min_sharpe: 0.5
   max_drawdown: 0.15
   must_beat_benchmark: true
+  # 2026-09-18: judge the benchmark on risk-adjusted returns (Sharpe), not raw
+  # total return -- beating QQQ's 2010-2022 raw run while capping drawdown at
+  # 15% proved self-contradictory (0/157 tests passed).
+  beat_benchmark_on: sharpe
   max_pairwise_corr: 0.7
 
 # Keep grids small: 2-4 values per param so runs finish quickly.

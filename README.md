@@ -149,7 +149,7 @@ Phases 1–3 are complete. Phase 4 (daily-signal dashboard) is next.
 | `test_start` | Sealed data start (Phase 3 validation) |
 | `cache_dir` / `results_dir` | Where bars and outputs live |
 | `costs.commission_bps` / `costs.slippage_bps` | Per-rebalance cost on traded notional |
-| `criteria.*` | `min_trades`, `min_sharpe`, `max_drawdown` (fraction), `must_beat_benchmark`, `max_pairwise_corr` |
+| `criteria.*` | `min_trades`, `min_sharpe`, `max_drawdown` (fraction), `must_beat_benchmark`, `beat_benchmark_on` (`sharpe` or `total_return`), `max_pairwise_corr` |
 | `param_grids.<strategy>` | Parameter name -> list of values to exhaust |
 | `mutate.*` | `n_rounds`, `n_children`, `perturb` (fraction), `top_k`, `seed` |
 | `validate.warmup_days` | Calendar-day buffer before `test_start` for indicator warmup (never scored) |

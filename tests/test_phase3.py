@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from trading_system import synthetic
-from trading_system.criteria import PassCriteria
+from trading_system.criteria import PassCriteria, evaluate
 from trading_system.engine import BacktestResult, Costs, backtest, compute_metrics
 from trading_system.portfolio import assemble, correlation_filter
 from trading_system.research.validate import (
@@ -302,3 +302,45 @@ def test_metrics_key_parity_engine_vs_risk():
     assert "exposure_pct" in risk_res.metrics
     assert risk_res.metrics["exposure_pct"] == pytest.approx(plain.metrics["exposure_pct"])
     assert risk_res.metrics["exposure_pct"] > 0
+
+
+def _result_with(sharpe, total_return, max_dd=0.10, n_trades=100):
+    idx = pd.date_range("2020-01-01", periods=10, freq="D")
+    return BacktestResult(
+        equity=pd.Series(np.linspace(100.0, 110.0, 10), index=idx),
+        trades=pd.DataFrame(),
+        metrics={"sharpe": sharpe, "total_return": total_return,
+                 "max_drawdown": max_dd, "num_trades": n_trades},
+    )
+
+
+def test_beat_benchmark_on_sharpe():
+    # Higher Sharpe but lower raw return than the benchmark: passes under the
+    # Sharpe rule (chosen 2026-09-18), fails under the old total-return rule.
+    cand = _result_with(sharpe=0.90, total_return=0.50)
+    bench = _result_with(sharpe=0.75, total_return=4.74)
+    crit = PassCriteria(min_trades=1, min_sharpe=0.0, max_drawdown=0.15,
+                        must_beat_benchmark=True, beat_benchmark_on="sharpe")
+    passed, reasons = evaluate(cand, bench, crit)
+    assert passed, reasons
+
+    crit_tr = PassCriteria(min_trades=1, min_sharpe=0.0, max_drawdown=0.15,
+                           must_beat_benchmark=True, beat_benchmark_on="total_return")
+    passed_tr, reasons_tr = evaluate(cand, bench, crit_tr)
+    assert not passed_tr
+    assert any("total_return" in r for r in reasons_tr)
+
+
+def test_beat_benchmark_sharpe_failure_names_metric():
+    cand = _result_with(sharpe=0.60, total_return=0.50)
+    bench = _result_with(sharpe=0.75, total_return=4.74)
+    crit = PassCriteria(min_trades=1, min_sharpe=0.0, max_drawdown=0.15,
+                        must_beat_benchmark=True, beat_benchmark_on="sharpe")
+    passed, reasons = evaluate(cand, bench, crit)
+    assert not passed
+    assert any(r.startswith("sharpe") for r in reasons)
+
+
+def test_beat_benchmark_on_rejects_bad_value():
+    with pytest.raises(ValueError):
+        PassCriteria(beat_benchmark_on="cagr")
