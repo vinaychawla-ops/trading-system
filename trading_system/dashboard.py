@@ -11,10 +11,13 @@ himself. The dashboard tells him what to do; execution stays manual.
 from __future__ import annotations
 
 import html
+from datetime import date
+from pathlib import Path
 
 import pandas as pd
 
-from .engine import backtest
+from .data import get_daily_bars
+from .engine import Costs, backtest
 from .indicators import sma
 from .strategies.core import core_rotation_signal
 
@@ -301,3 +304,51 @@ with your actual holdings before acting. Not financial advice.
 </div>
 </body></html>
 """
+
+
+def generate_dashboard_html(
+    *,
+    cache_dir: str | Path = "data/cache",
+    costs: Costs | None = None,
+    drawdown_cap: float = 0.30,
+    start: str = "2010-01-01",
+    end: str | None = None,
+    prices: dict[str, pd.DataFrame] | None = None,
+    risky: str = "QQQ",
+    safe: str = "GLD",
+    ma: int = 200,
+) -> tuple[str, dict]:
+    """Refresh bars, recompute the core signal, render the dashboard.
+
+    The single code path used by both the local script and the Modal
+    deployment: fetch daily bars (or use ``prices`` when given, which skips
+    the download and keeps tests offline), run the core rotation signal and
+    model backtest, and render the self-contained HTML page.
+
+    Returns ``(html_page, summary)`` where ``summary`` is the dict from
+    :func:`summarize_core_signal`.
+    """
+    if prices is None:
+        prices = get_daily_bars(
+            [risky, safe],
+            start=start,
+            end=end or date.today().isoformat(),
+            cache_dir=cache_dir,
+        )
+    signals = core_rotation_signal(prices, risky=risky, safe=safe, ma=ma)
+    result = backtest(prices, signals, costs or Costs())
+
+    summary = summarize_core_signal(prices, risky=risky, safe=safe, ma=ma)
+    rotations = rotation_history(signals, result.equity)
+    asof = summary["asof"]
+    asof_label = f"{pd.Timestamp(asof).date()} close (data through latest bar)"
+
+    html_page = render_dashboard_html(
+        summary=summary,
+        equity=result.equity,
+        rotations=rotations,
+        metrics=result.metrics,
+        drawdown_cap=drawdown_cap,
+        asof_label=asof_label,
+    )
+    return html_page, summary

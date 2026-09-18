@@ -164,6 +164,20 @@ trades the rebalancer used to chase after costs on a fully-invested portfolio.
 It changes backtested economics not at all (core sealed metrics identical to
 6dp) but trade counts are now honest.
 
+## Automated dashboard on Modal
+
+`modal_app.py` hosts the dashboard so nobody has to run anything manually:
+
+- `refresh_dashboard` — scheduled weekdays at 22:00 UTC (after the US close):
+  refreshes QQQ/GLD bars and rebuilds the HTML on a persistent Modal volume
+  (the parquet cache lives there too, so refreshes stay incremental).
+- `dashboard` — public web endpoint serving the latest generated HTML.
+
+It runs the exact same `trading_system/dashboard.py::generate_dashboard_html`
+code path as `scripts/make_dashboard.py` (verified byte-identical output).
+Deploy from the repo root with `modal deploy modal_app.py`; trigger a one-off
+refresh with `modal run modal_app.py::refresh_dashboard`.
+
 ## Config reference
 
 | Key | Meaning |

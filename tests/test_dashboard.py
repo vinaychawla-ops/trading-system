@@ -96,3 +96,12 @@ def test_render_html_contains_signal():
     assert "HOLD QQQ" in html_page
     assert "Methodology" in html_page
     assert "30%" in html_page
+
+
+def test_generate_dashboard_html_offline_with_prices():
+    # The shared local/Modal code path, with synthetic prices so no download.
+    html_page, summary = dash.generate_dashboard_html(prices=_prices())
+    assert summary["action"] == "HOLD"
+    assert summary["position"] == "QQQ"
+    assert "HOLD QQQ" in html_page
+    assert "Core signal dashboard" in html_page

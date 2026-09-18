@@ -12,19 +12,14 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import yaml
 
-import pandas as pd
-
 from trading_system import dashboard as dash
-from trading_system.data import get_daily_bars
-from trading_system.engine import Costs, backtest
-from trading_system.strategies.core import core_rotation_signal
+from trading_system.engine import Costs
 
 
 def load_config(path: str) -> dict:
@@ -43,30 +38,11 @@ def main() -> None:
     costs = Costs(**cfg.get("costs", {}))
     drawdown_cap = float(cfg["criteria"]["max_drawdown"])
 
-    tickers = ["QQQ", "GLD"]
     print("Refreshing daily bars ...", flush=True)
-    prices = get_daily_bars(
-        tickers,
-        start="2010-01-01",
-        end=date.today().isoformat(),
+    html_page, summary = dash.generate_dashboard_html(
         cache_dir=cache_dir,
-    )
-
-    signals = core_rotation_signal(prices, risky="QQQ", safe="GLD", ma=200)
-    result = backtest(prices, signals, costs)
-
-    summary = dash.summarize_core_signal(prices)
-    rotations = dash.rotation_history(signals, result.equity)
-    asof = summary["asof"]
-    asof_label = f"{pd.Timestamp(asof).date()} close (data through latest bar)"
-
-    html_page = dash.render_dashboard_html(
-        summary=summary,
-        equity=result.equity,
-        rotations=rotations,
-        metrics=result.metrics,
+        costs=costs,
         drawdown_cap=drawdown_cap,
-        asof_label=asof_label,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html_page, encoding="utf-8")
