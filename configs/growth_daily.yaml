@@ -57,7 +57,9 @@ costs:
 criteria:
   min_trades: 30
   min_sharpe: 0.5
-  max_drawdown: 0.15
+  # 2026-09-18: raised 0.15 -> 0.25 per Vin -- the 15% cap bound on everything
+  # including the core (QQQ/GLD rotation runs ~30% max DD on COVID).
+  max_drawdown: 0.25
   must_beat_benchmark: true
   # 2026-09-18: judge the benchmark on risk-adjusted returns (Sharpe), not raw
   # total return -- beating QQQ's 2010-2022 raw run while capping drawdown at

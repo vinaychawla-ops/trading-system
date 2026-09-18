@@ -7,7 +7,7 @@ Sleeve source (config portfolio.sleeve_source):
 
 Writes results/portfolio_equity.csv and results/portfolio_summary.txt, and
 prints a core-only vs sleeve-only vs combined vs QQQ buy-and-hold comparison
-with the 15% drawdown filter verdict.
+with the configured drawdown filter verdict.
 
 Usage:
     python scripts/assemble.py --config configs/growth_daily.yaml
@@ -126,7 +126,7 @@ def main() -> None:
         )
     lines.append("")
     lines.append(
-        f"15% drawdown filter: combined maxDD {m['max_drawdown']:.3f} -> "
+        f"Drawdown filter: combined maxDD {m['max_drawdown']:.3f} -> "
         f"{'PASS' if dd_ok else 'FAIL'} (limit {criteria.max_drawdown})"
     )
     lines.append(
