@@ -68,8 +68,10 @@ def get_daily_bars(
 
     Cache hit rule: if ``cache_dir/<ticker>.parquet`` exists and covers the full
     requested [start, end] range, the cached slice is used and no download happens.
-    Otherwise the ticker is (re)downloaded and the cache file is overwritten with
-    the fresh full-range download.
+    Otherwise the ticker is (re)downloaded and the fresh data is *merged* into the
+    existing cache (union of trading days) -- the cache only ever grows, so a
+    request for a shorter window (e.g. the 2010-2022 train window ending on a
+    Saturday) can never truncate newer cached data.
     """
     cache = Path(cache_dir)
     cache.mkdir(parents=True, exist_ok=True)
@@ -87,6 +89,13 @@ def get_daily_bars(
                 df = cached
         if df is None:
             df = _download(ticker, start, end)
+            if path.exists():
+                # Merge instead of overwrite: a shorter-window request must not
+                # destroy newer data already in the cache.
+                old = pd.read_parquet(path)
+                old.index = pd.DatetimeIndex(pd.to_datetime(old.index))
+                df = pd.concat([old, df])
+                df = df[~df.index.duplicated(keep="last")].sort_index()
             df.to_parquet(path)
         out[ticker] = df.loc[start_ts:end_ts]
         if out[ticker].empty:

@@ -42,6 +42,19 @@ profile:
     - QQQ
     - GLD
     - SPY
+    # 2026-09-18: SPDR sector ETFs added per Vin -- sleeve-eligible tactical
+    # universe alongside the single names (sleeve auto-excludes QQQ/GLD/SPY only).
+    - XLE
+    - XLF
+    - XLK
+    - XLV
+    - XLI
+    - XLP
+    - XLY
+    - XLU
+    - XLB
+    - XLRE
+    - XLC
 
 train_start: "2010-01-01"
 train_end: "2022-12-31"
@@ -57,9 +70,10 @@ costs:
 criteria:
   min_trades: 30
   min_sharpe: 0.5
-  # 2026-09-18: raised 0.15 -> 0.25 per Vin -- the 15% cap bound on everything
-  # including the core (QQQ/GLD rotation runs ~30% max DD on COVID).
-  max_drawdown: 0.25
+  # 2026-09-18: raised 0.15 -> 0.25 per Vin (00:00Z); raised 0.25 -> 0.30
+  # per Vin (04:00Z) -- the 15% cap bound on everything including the core
+  # (QQQ/GLD rotation runs ~30% max DD on COVID).
+  max_drawdown: 0.30
   must_beat_benchmark: true
   # 2026-09-18: judge the benchmark on risk-adjusted returns (Sharpe), not raw
   # total return -- beating QQQ's 2010-2022 raw run while capping drawdown at
