@@ -1,0 +1,53 @@
+# Tiny config for smoke tests: 1 year of data, 4 tickers, small grids.
+profile:
+  name: smoke
+  universe:
+    - AAPL
+    - MSFT
+    - QQQ
+    - GLD
+
+train_start: "2023-01-02"
+train_end: "2023-12-29"
+test_start: "2024-01-01"
+
+cache_dir: "data/cache"
+results_dir: "results"
+
+costs:
+  commission_bps: 1.0
+  slippage_bps: 5.0
+
+criteria:
+  min_trades: 2
+  min_sharpe: 0.0
+  max_drawdown: 0.5
+  must_beat_benchmark: false
+  max_pairwise_corr: 0.9
+
+param_grids:
+  trend_pullback:
+    lookback: [20]
+    rsi_window: [2]
+    rsi_thresh: [30]
+    hold_days: [5]
+    max_positions: [2]
+  low_range_close:
+    lookback: [20]
+    range_window: [10]
+    pct: [0.25]
+    hold_days: [5]
+    max_positions: [2]
+  quiet_pullback:
+    lookback: [20]
+    pullback_days: [3]
+    range_atr_frac: [1.0]
+    hold_days: [5]
+    max_positions: [2]
+
+mutate:
+  n_rounds: 1
+  n_children: 2
+  perturb: 0.25
+  top_k: 1
+  seed: 42

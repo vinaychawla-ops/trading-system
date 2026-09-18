@@ -1,0 +1,90 @@
+# Long-term growth profile, daily bars, US equities/ETFs.
+profile:
+  name: growth_daily
+  universe:
+    - AAPL
+    - MSFT
+    - NVDA
+    - AMZN
+    - META
+    - GOOGL
+    - AVGO
+    - TSLA
+    - BRK-B
+    - JPM
+    - V
+    - JNJ
+    - XOM
+    - UNH
+    - MA
+    - PG
+    - LLY
+    - HD
+    - MRK
+    - ABBV
+    - COST
+    - PEP
+    - CVX
+    - WMT
+    - BAC
+    - KO
+    - CSCO
+    - ADBE
+    - CRM
+    - NFLX
+    - AMD
+    - QCOM
+    - TXN
+    - HON
+    - AMGN
+    - DIS
+    - PFE
+    - QQQ
+    - GLD
+    - SPY
+
+train_start: "2010-01-01"
+train_end: "2022-12-31"
+test_start: "2023-01-01"  # sealed until Phase 3 validation
+
+cache_dir: "data/cache"
+results_dir: "results"
+
+costs:
+  commission_bps: 1.0
+  slippage_bps: 5.0
+
+criteria:
+  min_trades: 30
+  min_sharpe: 0.5
+  max_drawdown: 0.15
+  must_beat_benchmark: true
+  max_pairwise_corr: 0.7
+
+# Keep grids small: 2-4 values per param so runs finish quickly.
+param_grids:
+  trend_pullback:
+    lookback: [50, 200]
+    rsi_window: [2, 5]
+    rsi_thresh: [20, 30]
+    hold_days: [5, 10]
+    max_positions: [5]
+  low_range_close:
+    lookback: [50, 200]
+    range_window: [10, 20]
+    pct: [0.1, 0.25]
+    hold_days: [5, 10]
+    max_positions: [5]
+  quiet_pullback:
+    lookback: [50, 200]
+    pullback_days: [3, 4]
+    range_atr_frac: [0.5, 1.0]
+    hold_days: [5, 10]
+    max_positions: [5]
+
+mutate:
+  n_rounds: 2
+  n_children: 6
+  perturb: 0.25
+  top_k: 3
+  seed: 42
