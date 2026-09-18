@@ -8,9 +8,10 @@ around a **core + sleeve** portfolio architecture:
 - **Sleeve** — short-horizon tactical strategies (pullback families) traded on
   individual large-cap stocks, re-picked from a researched bench.
 
-This repo covers **Phases 1–2**: data, backtesting engine, pass criteria, the
-strategy library, and the search loop. No live trading, no broker connections —
-research and backtesting only.
+This repo covers **Phases 1–3**: data, backtesting engine, pass criteria, the
+strategy library, the search loop, out-of-sample validation, walk-forward
+sleeve re-picking, portfolio assembly, and risk sizing. No live trading, no
+broker connections — research and backtesting only.
 
 > **Disclaimer — not financial advice.** This software is for research and
 > education. Backtested performance is not a guarantee of future results;
@@ -43,6 +44,16 @@ python scripts/run_search.py --config configs/growth_daily.yaml
 python scripts/summarize.py
 python scripts/summarize.py --top 10
 
+# 4. Validate candidates on sealed test data (train vs test metrics -> results/validation.csv)
+python scripts/validate.py --config configs/growth_daily.yaml
+
+# 5. Walk-forward sleeve repick (quarterly selection on pre-rebalance data only)
+python scripts/walkforward.py --config configs/growth_daily.yaml
+
+# 6. Assemble core+sleeve portfolio with correlation filter + risk overlay
+python scripts/assemble.py --config configs/growth_daily.yaml
+python scripts/assemble.py --config configs/growth_daily.yaml --sleeve-source validated
+
 # Fast smoke test (synthetic data, no downloads)
 python scripts/run_search.py --config configs/smoke.yaml --smoke
 ```
@@ -68,6 +79,10 @@ trading_system/
   research/
     ledger.py        # append-only JSONL audit trail of every tested candidate
     search.py        # grid_search + mutate_search (evolutionary perturbation)
+    validate.py      # out-of-sample validation on sealed test data
+    walkforward.py   # quarterly sleeve repick on strictly pre-rebalance data
+  portfolio.py       # core+sleeve assembly with correlation filter
+  risk.py            # position sizing + risk-limited backtest with borrow costs
 configs/
   growth_daily.yaml  # full profile: 40-ticker universe, 2010-2022 train, costs, criteria, grids
   smoke.yaml         # tiny config for fast smoke tests
@@ -75,9 +90,13 @@ scripts/
   fetch_data.py      # download + cache the universe
   run_search.py      # grid + mutate search on train data -> candidates.csv
   summarize.py       # print ranked candidates
-tests/               # pytest suite (no-lookahead, costs, metrics, strategies, ledger, data)
+  validate.py        # re-run candidates on sealed test data -> validation.csv
+  walkforward.py     # quarterly sleeve repick -> walkforward_{equity,signals,picks}
+  assemble.py        # core+sleeve portfolio + risk overlay -> portfolio_summary.txt
+tests/               # pytest suite (no-lookahead, costs, metrics, strategies, ledger, data,
+                     # validation discipline, walk-forward traps, kill rule, risk math)
 data/cache/          # downloaded parquet bars (git-ignored)
-results/             # ledger.jsonl, candidates.csv (git-ignored)
+results/             # ledger.jsonl, candidates.csv, validation.csv, walk-forward + portfolio outputs (git-ignored)
 ```
 
 ## The research loop
@@ -96,9 +115,30 @@ results/             # ledger.jsonl, candidates.csv (git-ignored)
    appended to `results/ledger.jsonl`, so winners can be audited and losers studied.
 6. **Candidates** — passing strategies ranked by Sharpe land in
    `results/candidates.csv`.
+7. **Validation** — `scripts/validate.py` re-runs every candidate on the sealed
+   2023+ window (same criteria, QQQ benchmark over the same window) and writes
+   `results/validation.csv` with train vs test metrics and a `survived` flag.
+   A warmup buffer of pre-2023 data seeds the causal indicators; only dates
+   >= `test_start` are scored, and `check_train_test_separation` refuses any
+   train/test overlap.
+8. **Walk-forward** — `scripts/walkforward.py` simulates running the selection
+   process through history: each quarter it re-runs the (small) grid on the
+   trailing 5 years of data *strictly before* the rebalance date, holds the top
+   3 passers for one quarter, and applies the kill rule (live drawdown >
+   2x the selection max drawdown -> dropped, logged with reason). The stitched
+   sleeve is backtested in one engine run so quarter boundaries pay exact
+   costs. Outputs: `walkforward_equity.csv`, `walkforward_signals.parquet`
+   (reused by assembly), `walkforward_picks.jsonl` (every rebalance's picks,
+   kills, and selection metrics).
+9. **Assembly** — `scripts/assemble.py` combines core (70%) + sleeve (30%):
+   each component is backtested standalone, the correlation filter drops the
+   weaker member of any pair with |corr| > 0.7, weights renormalize, and the
+   combination is backtested once. A risk overlay replays the same portfolio
+   with the exposure cap (`capital_at_risk`), leverage ceiling, and borrowing
+   costs applied, reporting capped days and borrow drag.
 
-The 2023+ data is sealed off from the search (see `test_start` in the config);
-out-of-sample validation and walk-forward sleeve re-picking arrive in Phase 3.
+The 2023+ data was sealed off from the search (see `test_start` in the config);
+Phases 1–3 are complete. Phase 4 (daily-signal dashboard) is next.
 
 ## Config reference
 
@@ -112,11 +152,28 @@ out-of-sample validation and walk-forward sleeve re-picking arrive in Phase 3.
 | `criteria.*` | `min_trades`, `min_sharpe`, `max_drawdown` (fraction), `must_beat_benchmark`, `max_pairwise_corr` |
 | `param_grids.<strategy>` | Parameter name -> list of values to exhaust |
 | `mutate.*` | `n_rounds`, `n_children`, `perturb` (fraction), `top_k`, `seed` |
+| `validate.warmup_days` | Calendar-day buffer before `test_start` for indicator warmup (never scored) |
+| `walkforward.*` | `start`, `rebalance: quarterly`, `selection_lookback_years`, `top_k`, `kill_dd_multiple`, `warmup_days`, `walkforward_grid` (small per-rebalance grid) |
+| `portfolio.*` | `core_weight`, `sleeve_weight`, `max_pairwise_corr`, `sleeve_source` (`walkforward` or `validated`) |
+| `core.*` | `risky`, `safe`, `ma` for the core rotation |
+| `risk.*` | `max_loss_per_trade` ($), `capital_at_risk` ($), `leverage_ceiling`, `borrow_rate_annual`, `default_stop_pct` |
 
 ## Key assumptions
 
 - Daily bars only; decisions at the close execute at the next open (no intraday).
-- Long-only, fractional shares, no leverage, no shorting in this phase.
+- Long-only, fractional shares, no leverage by default (`risk.leverage_ceiling: 1.0`).
 - Costs are a flat bps charge on traded notional — no partial fills, no market impact model.
 - Corporate actions: prices come from yfinance unadjusted OHLC; use with care around splits/dividends for single-name backtests over long horizons.
-- The benchmark is QQQ buy-and-hold over the same train window, run through the same engine (so it pays the same entry cost).
+- The benchmark is QQQ buy-and-hold over the same window, run through the same engine (so it pays the same entry cost).
+- **Walk-forward honesty rules:** selection at rebalance date D uses only data in
+  `[D - 5y, D)`; signals are precomputed once because they are causal
+  (signal[t] depends only on data <= t), then sliced per window — precomputation
+  is a performance optimization, not a lookahead. The kill rule compares a
+  pick's live drawdown since inception against 2x its selection-time max
+  drawdown; kills happen only at rebalance dates.
+- **Validation honesty rules:** the test window is never touched during search;
+  indicator warmup uses pre-test data the search already saw, and scoring starts
+  strictly at `test_start`. Overlapping train/test ranges are refused outright.
+- **Risk model:** strategies emit no stops, so position sizing assumes a default
+  8% stop (`risk.default_stop_pct`). Borrowing above 1.0x equity accrues the
+  annual borrow rate daily on the borrowed portion.

@@ -88,3 +88,57 @@ mutate:
   perturb: 0.25
   top_k: 3
   seed: 42
+
+# Phase 3: out-of-sample validation on sealed test data.
+validate:
+  warmup_days: 300  # calendar-day buffer before test_start, indicator warmup only (never scored)
+
+# Phase 3: walk-forward sleeve repick.
+walkforward:
+  start: "2018-01-01"
+  rebalance: quarterly
+  selection_lookback_years: 5
+  top_k: 3
+  kill_dd_multiple: 2.0
+  warmup_days: 300
+  # Smaller override grid for the per-rebalance selection (keeps runtime sane).
+  walkforward_grid:
+    trend_pullback:
+      lookback: [50, 200]
+      rsi_window: [2]
+      rsi_thresh: [20, 30]
+      hold_days: [5]
+      max_positions: [5]
+    low_range_close:
+      lookback: [50, 200]
+      range_window: [10]
+      pct: [0.1, 0.25]
+      hold_days: [5]
+      max_positions: [5]
+    quiet_pullback:
+      lookback: [50, 200]
+      pullback_days: [3]
+      range_atr_frac: [0.5, 1.0]
+      hold_days: [5]
+      max_positions: [5]
+
+# Phase 3: portfolio assembly.
+portfolio:
+  core_weight: 0.7
+  sleeve_weight: 0.3
+  max_pairwise_corr: 0.7
+  sleeve_source: walkforward  # or: validated
+
+# Core strategy parameters (defaults shown; empty section also means defaults).
+core:
+  risky: QQQ
+  safe: GLD
+  ma: 200
+
+# Phase 3: risk sizing -- the three user levers.
+risk:
+  max_loss_per_trade: 500.0   # dollars: most one trade may lose
+  capital_at_risk: 80000.0    # dollars: cap on total market exposure
+  leverage_ceiling: 1.0       # 1.0 = no leverage; borrowing accrues below
+  borrow_rate_annual: 0.05
+  default_stop_pct: 0.08      # assumption: strategies emit no stops
