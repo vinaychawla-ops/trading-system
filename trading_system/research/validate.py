@@ -118,6 +118,10 @@ def validate_candidates(
         result = backtest(test_data, signals, costs=costs)
         passed, reasons = evaluate(result, benchmark, criteria=criteria)
         m = result.metrics
+        # The benchmark comparison is informational even when it is not a gate:
+        # record the benchmark's metric so validation.csv keeps the comparison
+        # visible for judgment (2026-09-18: gate -> informational per Vin).
+        metric = criteria.beat_benchmark_on
         rows.append(
             {
                 "strategy": name,
@@ -130,6 +134,7 @@ def validate_candidates(
                 "test_cagr": float(m["cagr"]),
                 "test_max_dd": float(m["max_drawdown"]),
                 "test_n_trades": int(m["num_trades"]),
+                f"benchmark_{metric}": float(benchmark.metrics.get(metric, 0.0)),
                 "survived": bool(passed),
                 "fail_reasons": "; ".join(reasons),
             }

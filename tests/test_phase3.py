@@ -344,3 +344,28 @@ def test_beat_benchmark_sharpe_failure_names_metric():
 def test_beat_benchmark_on_rejects_bad_value():
     with pytest.raises(ValueError):
         PassCriteria(beat_benchmark_on="cagr")
+
+
+def test_benchmark_gate_off_passes_below_benchmark_sharpe():
+    # 2026-09-18: benchmark is informational, not a gate (per Vin). A candidate
+    # below the benchmark Sharpe must pass when must_beat_benchmark=False.
+    cand = _result_with(sharpe=0.60, total_return=0.50)
+    bench = _result_with(sharpe=1.43, total_return=4.74)
+    crit = PassCriteria(min_trades=1, min_sharpe=0.5, max_drawdown=0.30,
+                        must_beat_benchmark=False, beat_benchmark_on="sharpe")
+    passed, reasons = evaluate(cand, bench, crit)
+    assert passed, reasons
+
+
+def test_validate_records_benchmark_metric_informational():
+    # The benchmark comparison must still be reported in validation.csv even
+    # when it is not a gate, so the information isn't lost.
+    data = synthetic.random_walk_prices(
+        ["QQQ", "GLD"], "2022-06-01", "2023-06-30", seed=3
+    )
+    crit = PassCriteria(min_trades=1, min_sharpe=0.0, max_drawdown=0.30,
+                        must_beat_benchmark=False, beat_benchmark_on="sharpe")
+    df = validate_candidates(_tiny_candidates(), data, "2023-01-01", Costs(), crit)
+    assert len(df) == 1
+    assert "benchmark_sharpe" in df.columns
+    assert df["benchmark_sharpe"].iloc[0] > 0
