@@ -143,3 +143,29 @@ def test_walk_forward_splits_cover_without_overlap():
     for train, test in splits:
         assert train.max() < test.min()
         assert len(train) > 0 and len(test) > 0
+
+
+def test_dust_trades_not_executed_or_recorded():
+    """Regression: after a rotation, the cost used to leave a tiny negative
+    cash balance that the rebalancer chased with converging sub-dollar
+    'trades' every following day. Sub-minimum trades are now skipped."""
+    idx = pd.bdate_range("2021-01-01", periods=60)
+
+    def _flat(px):
+        s = pd.Series(px, index=idx)
+        return pd.DataFrame(
+            {"Open": s, "High": s, "Low": s, "Close": s, "Volume": 1_000_000}
+        )
+
+    prices = {"AAA": _flat(100.0), "BBB": _flat(200.0)}
+    w = pd.DataFrame(0.0, index=idx, columns=["AAA", "BBB"])
+    w.loc[idx[:30], "AAA"] = 1.0
+    w.loc[idx[30:], "BBB"] = 1.0
+    result = backtest(prices, w, costs=Costs())
+    # Buy AAA, realize the $60 entry cost the next day, then on the rotation
+    # sell AAA + buy BBB and realize those costs the next day: 5 real trades,
+    # and no converging dust cascade afterwards.
+    assert len(result.trades) == 5
+    notionals = result.trades["shares"] * result.trades["price"]
+    assert (notionals >= 1.0).all()
+    assert result.trades["date"].max() == idx[32]

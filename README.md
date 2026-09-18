@@ -8,10 +8,11 @@ around a **core + sleeve** portfolio architecture:
 - **Sleeve** — short-horizon tactical strategies (pullback families) traded on
   individual large-cap stocks, re-picked from a researched bench.
 
-This repo covers **Phases 1–3**: data, backtesting engine, pass criteria, the
+This repo covers **Phases 1–4**: data, backtesting engine, pass criteria, the
 strategy library, the search loop, out-of-sample validation, walk-forward
-sleeve re-picking, portfolio assembly, and risk sizing. No live trading, no
-broker connections — research and backtesting only.
+sleeve re-picking, portfolio assembly, risk sizing, and the daily-signal
+dashboard. No live trading, no broker connections — research and backtesting
+only. Trade execution stays manual: the dashboard tells you what to do.
 
 > **Disclaimer — not financial advice.** This software is for research and
 > education. Backtested performance is not a guarantee of future results;
@@ -54,6 +55,10 @@ python scripts/walkforward.py --config configs/growth_daily.yaml
 python scripts/assemble.py --config configs/growth_daily.yaml
 python scripts/assemble.py --config configs/growth_daily.yaml --sleeve-source validated
 
+# 7. Phase 4: generate the daily-signal dashboard for the validated core
+#    (self-contained results/dashboard.html — open it in any browser)
+python scripts/make_dashboard.py --config configs/growth_daily.yaml
+
 # Fast smoke test (synthetic data, no downloads)
 python scripts/run_search.py --config configs/smoke.yaml --smoke
 ```
@@ -83,6 +88,7 @@ trading_system/
     walkforward.py   # quarterly sleeve repick on strictly pre-rebalance data
   portfolio.py       # core+sleeve assembly with correlation filter
   risk.py            # position sizing + risk-limited backtest with borrow costs
+  dashboard.py       # Phase 4: core signal summary + self-contained HTML dashboard
 configs/
   growth_daily.yaml  # full profile: 40-ticker universe, 2010-2022 train, costs, criteria, grids
   smoke.yaml         # tiny config for fast smoke tests
@@ -93,6 +99,7 @@ scripts/
   validate.py        # re-run candidates on sealed test data -> validation.csv
   walkforward.py     # quarterly sleeve repick -> walkforward_{equity,signals,picks}
   assemble.py        # core+sleeve portfolio + risk overlay -> portfolio_summary.txt
+  make_dashboard.py  # Phase 4: refresh bars + render results/dashboard.html
 tests/               # pytest suite (no-lookahead, costs, metrics, strategies, ledger, data,
                      # validation discipline, walk-forward traps, kill rule, risk math)
 data/cache/          # downloaded parquet bars (git-ignored)
@@ -138,7 +145,24 @@ results/             # ledger.jsonl, candidates.csv, validation.csv, walk-forwar
    costs applied, reporting capped days and borrow drag.
 
 The 2023+ data was sealed off from the search (see `test_start` in the config);
-Phases 1–3 are complete. Phase 4 (daily-signal dashboard) is next.
+Phases 1–4 are complete.
+
+## Phase 4: daily-signal dashboard
+
+`scripts/make_dashboard.py` refreshes QQQ/GLD bars, recomputes the validated
+core rotation signal (100% QQQ above its 200-day MA, else 100% GLD) through the
+latest close, paper-tracks the model portfolio, and writes a single
+self-contained `results/dashboard.html` (hand-rolled SVG charts, no new
+dependencies). Open it in any browser whenever you want the signal — no server,
+no accounts. The signal at close *t* is for the *next* open, matching the
+backtest's no-lookahead convention. You place the trades yourself; the model
+portfolio assumes every signal was followed, so reconcile it with your actual
+holdings before acting.
+
+Engine note: `Costs.min_trade_notional` ($1 default) skips sub-dollar "dust"
+trades the rebalancer used to chase after costs on a fully-invested portfolio.
+It changes backtested economics not at all (core sealed metrics identical to
+6dp) but trade counts are now honest.
 
 ## Config reference
 

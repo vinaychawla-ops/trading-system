@@ -30,6 +30,10 @@ TRADING_DAYS = 252
 class Costs:
     commission_bps: float = 1.0
     slippage_bps: float = 5.0
+    min_trade_notional: float = 1.0
+    """Trades smaller than this notional (dust from cost-chasing on a fully
+    invested portfolio) are not executed or recorded: no broker fills them,
+    and they only inflate trade counts."""
 
     @property
     def rate(self) -> float:
@@ -144,10 +148,12 @@ def backtest(
             v_open = cash + float(shares @ oi)
             target = np.where(oi > 0, w[i] * v_open / oi, 0.0)
         delta = target - shares
+        # Skip dust: sub-minimum trades are neither executed nor recorded.
+        delta = np.where(np.abs(delta) * oi > costs.min_trade_notional, delta, 0.0)
         traded_notional = float(np.abs(delta) @ oi)
         trade_cost = traded_notional * cost_rate
-        cash = v_open - float(target @ oi) - trade_cost
-        shares = target
+        shares = shares + delta
+        cash = v_open - float(shares @ oi) - trade_cost
         equity_vals[i] = cash + float(shares @ ci)
 
         nz = np.abs(delta) > 1e-9

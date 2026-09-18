@@ -17,6 +17,7 @@ results_dir: "results"
 costs:
   commission_bps: 1.0
   slippage_bps: 5.0
+  min_trade_notional: 1.0
 
 criteria:
   min_trades: 2
