@@ -89,6 +89,39 @@ def rotation_history(signals: pd.DataFrame, equity: pd.Series) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["date", "from", "to", "days_held", "holding_return"])
 
 
+def _describe_rotation_row(r) -> str:
+    return (
+        f"on {r['date'].date()} it sold {r['from']} and bought {r['to']}, "
+        f"after holding {r['from']} for {int(r['days_held'])} trading days "
+        f"({r['holding_return']:+.1%})"
+    )
+
+
+def rotation_reading_note(rotations: pd.DataFrame) -> str:
+    """Plain-language note explaining how to read the rotation table.
+
+    The table is newest-first, so the note walks through the current top
+    rows. "Days held" / "Holding return" always describe the leg that just
+    ended (the FROM side), counted in trading days.
+    """
+    newest = rotations.iloc[::-1].reset_index(drop=True)
+    if len(newest) == 0:
+        return "No rotations yet — the model has held its initial position since inception."
+    note = (
+        "How to read this table (newest first): the top row says "
+        + _describe_rotation_row(newest.iloc[0])
+        + '. "Days held" and "Holding return" always describe the leg that just '
+        "ended — the FROM side — counted in trading days, not calendar days."
+    )
+    if len(newest) > 1:
+        note += (
+            " The next row reads the same way: "
+            + _describe_rotation_row(newest.iloc[1])
+            + "."
+        )
+    return note
+
+
 def current_drawdown(equity: pd.Series) -> float:
     running_max = equity.cummax()
     return float(1.0 - equity.iloc[-1] / running_max.iloc[-1])
@@ -255,6 +288,7 @@ def render_dashboard_html(
         "</tr>"
         for _, r in rotations.iloc[::-1].iterrows()
     )
+    reading_note = rotation_reading_note(rotations)
 
     css = """
     body{font-family:-apple-system,system-ui,'Segoe UI',sans-serif;margin:0 auto;max-width:900px;padding:24px;color:#111827;background:#f9fafb}
@@ -294,7 +328,8 @@ def render_dashboard_html(
 <div class="card">{dd_svg}<div class="muted">Amber dots on the equity chart mark rotations.</div></div>
 <div class="card"><h2>Rotation history</h2>
 <table><tr><th>Date</th><th>Rotation</th><th>Days held</th><th>Holding return</th></tr>
-{rot_rows}</table></div>
+{rot_rows}</table>
+<div class="muted" style="margin-top:10px">{reading_note}</div></div>
 <div class="card muted"><h2>Methodology</h2>
 Rule: hold 100% QQQ when QQQ's close is above its 200-day moving average, otherwise 100% GLD.
 Signals use each day's close and trade at the next open (no lookahead). Costs: 1 bp commission + 5 bps

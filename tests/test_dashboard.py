@@ -105,3 +105,39 @@ def test_generate_dashboard_html_offline_with_prices():
     assert summary["position"] == "QQQ"
     assert "HOLD QQQ" in html_page
     assert "Core signal dashboard" in html_page
+
+
+def test_rotation_reading_note_explains_top_rows():
+    # Up, then down through the MA (flip to GLD), then back up (flip to QQQ).
+    idx = pd.bdate_range("2020-01-01", periods=300 + 90 + 120)
+    qqq = [100.0 + i * 0.5 for i in range(300)]
+    last = qqq[-1]
+    for _ in range(90):
+        last *= 0.985
+        qqq.append(last)
+    for _ in range(120):
+        last += 0.5
+        qqq.append(last)
+    prices = {"QQQ": _frame(qqq, idx), "GLD": _frame([150.0] * len(idx), idx)}
+    signals = core_rotation_signal(prices)
+    equity = pd.Series(
+        [100_000.0 + i * 10 for i in range(len(signals))], index=signals.index
+    )
+    rotations = dash.rotation_history(signals, equity)
+    assert len(rotations) == 2
+    note = dash.rotation_reading_note(rotations)
+    top = rotations.iloc[-1]
+    assert str(top["date"].date()) in note
+    assert f"sold {top['from']} and bought {top['to']}" in note
+    assert "FROM side" in note
+    assert "trading days, not calendar days" in note
+    # Second row is explained too.
+    second = rotations.iloc[-2]
+    assert str(second["date"].date()) in note
+
+
+def test_rotation_reading_note_empty():
+    note = dash.rotation_reading_note(
+        pd.DataFrame(columns=["date", "from", "to", "days_held", "holding_return"])
+    )
+    assert "No rotations yet" in note
